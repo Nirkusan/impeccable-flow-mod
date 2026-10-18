@@ -9,19 +9,35 @@ export type Step = {
   covers?: readonly string[]
 }
 
-export type Flow = { id: FlowId; label: string; steps: readonly Step[] }
+export type Flow = { id: FlowId; label: string; summary: string; steps: readonly Step[] }
 
 export type Status = 'done' | 'skipped' | 'current' | 'todo'
 
-const TARGETED = ['layout', 'typeset', 'clarify', 'quieter', 'bolder', 'distill', 'colorize', 'adapt', 'harden']
+export type Fix = { command: string; use: string }
 
-const TARGETED_HINT =
-  'Pick from the critique: layout (spacing, hierarchy), typeset (type), clarify (copy), quieter, bolder, distill (clutter), colorize, adapt (mobile), harden (edge cases).'
+// The targeted commands of the polish flow, in the order the pane lists them.
+export const FIXES: readonly Fix[] = [
+  { command: 'layout', use: 'Spacing, hierarchy' },
+  { command: 'typeset', use: 'Type' },
+  { command: 'clarify', use: 'Copy, error messages' },
+  { command: 'distill', use: 'Cluttered' },
+  { command: 'adapt', use: 'Phones and tablets' },
+  { command: 'quieter', use: 'Too loud' },
+  { command: 'bolder', use: 'Too bland' },
+  { command: 'colorize', use: 'Flat or grey' },
+  { command: 'harden', use: 'Edge cases' },
+]
+
+const TARGETED = FIXES.map(f => f.command)
+
+// Recorded by the Skip button: the current step is passed over.
+export const SKIP: Run = { command: '#skip', target: '' }
 
 export const FLOWS: readonly Flow[] = [
   {
     id: 'component',
-    label: 'New component',
+    label: 'Component',
+    summary: 'Build something new: shape, craft, audit, polish.',
     steps: [
       { label: 'Shape', commands: ['shape'], hint: 'Pin down the brief. Skip it when the brief is clear: craft runs shape itself.' },
       { label: 'Craft', commands: ['craft'], covers: ['shape'], hint: 'Build the component.' },
@@ -35,7 +51,8 @@ export const FLOWS: readonly Flow[] = [
   },
   {
     id: 'redesign',
-    label: 'Full redesign',
+    label: 'Redesign',
+    summary: 'Critique first, rebuild, then re-score.',
     steps: [
       { label: 'Critique', commands: ['critique'], hint: 'Score the page and list the problems shape and craft will fix.' },
       { label: 'Shape', commands: ['shape'], hint: 'Plan the new structure from the critique findings.' },
@@ -48,10 +65,11 @@ export const FLOWS: readonly Flow[] = [
   {
     id: 'polish',
     label: 'Polish',
+    summary: 'Diagnose, make 1 or 2 targeted fixes, polish.',
     steps: [
       { label: 'Critique or audit', commands: ['critique', 'audit'], hint: 'Critique for UX issues, audit for technical ones.' },
-      { label: 'Fix', commands: TARGETED, hint: TARGETED_HINT },
-      { label: 'Second fix', commands: TARGETED, isOptional: true, hint: TARGETED_HINT },
+      { label: 'Fix', commands: TARGETED, hint: 'Pick what the critique found.' },
+      { label: 'Second fix', commands: TARGETED, isOptional: true, hint: 'Pick what the critique found.' },
       { label: 'Polish', commands: ['polish'], hint: 'Final pass on the details.' },
     ],
   },
@@ -64,12 +82,16 @@ const ALL = new Set([
 
 export const flowById = (id: FlowId): Flow => FLOWS.find(f => f.id === id) ?? FLOWS[0]!
 
+export const isFlowId = (value: string): value is FlowId => FLOWS.some(f => f.id === value)
+
 export const parseRun = (args: string): Run | undefined => {
   const [command = '', ...rest] = args.trim().split(/\s+/)
   const name = command.toLowerCase()
 
   return ALL.has(name) ? { command: name, target: rest.join(' ') } : undefined
 }
+
+const isFix = (step: Step) => step.commands.length > 2
 
 export type Progress = {
   statuses: Status[]
@@ -85,9 +107,31 @@ export const progress = (id: FlowId, runs: readonly Run[]): Progress => {
   const statuses: Status[] = steps.map(() => 'todo')
   let at = 0
 
+  const passTo = (found: number, covers?: readonly string[]) => {
+    for (let i = at; i < found; i++) {
+      statuses[i] = covers?.some(c => steps[i]!.commands.includes(c)) ? 'done' : 'skipped'
+    }
+  }
+
   for (const { command } of runs) {
+    if (command === SKIP.command) {
+      let found = at
+
+      while (found < steps.length && steps[found]!.isOptional) {
+        found++
+      }
+
+      if (found < steps.length) {
+        passTo(found)
+        statuses[found] = 'skipped'
+        at = found + 1
+      }
+
+      continue
+    }
+
     // Running the step just done again (a second critique) is a re-run, not progress.
-    if (at > 0 && steps[at - 1]!.commands.includes(command)) {
+    if (at > 0 && statuses[at - 1] === 'done' && steps[at - 1]!.commands.includes(command)) {
       continue
     }
 
@@ -97,13 +141,7 @@ export const progress = (id: FlowId, runs: readonly Run[]): Progress => {
       continue
     }
 
-    const step = steps[found]!
-
-    for (let i = at; i < found; i++) {
-      const covered = step.covers?.some(c => steps[i]!.commands.includes(c))
-      statuses[i] = covered ? 'done' : 'skipped'
-    }
-
+    passTo(found, steps[found]!.covers)
     statuses[found] = 'done'
     at = found + 1
   }
@@ -124,49 +162,103 @@ export const progress = (id: FlowId, runs: readonly Run[]): Progress => {
 
   return {
     statuses,
-    next: nextStep && { step: nextStep, command: nextStep.commands.length > 2 ? '<fix>' : nextStep.commands[0]! },
+    next: nextStep && { step: nextStep, command: isFix(nextStep) ? '<fix>' : nextStep.commands[0]! },
     optional,
     isComplete: nextStep === undefined,
     target: runs.findLast(r => r.target !== '')?.target ?? '',
   }
 }
 
-const MARKS: Record<Status, string> = { done: '✓', current: '›', skipped: '–', todo: '○' }
+export type Row =
+  | { kind: 'step'; label: string; status: Status }
+  | { kind: 'optional'; items: { label: string; isRun: boolean }[] }
 
-export const nextCommand = (p: Progress): string | undefined =>
-  p.next && `/impeccable ${p.next.command} ${p.target === '' ? '<target>' : p.target}`
+export type Summary = Progress & {
+  flow: Flow
+  rows: Row[]
+  // 1-based place of the next step among the required steps.
+  stepNumber: number
+  requiredTotal: number
+  requiredDone: number
+  // The targeted commands to choose from, when the next step is a fix.
+  fixes: readonly Fix[] | undefined
+}
+
+export const summarize = (id: FlowId, runs: readonly Run[]): Summary => {
+  const flow = flowById(id)
+  const p = progress(id, runs)
+  const rows: Row[] = []
+
+  flow.steps.forEach((step, i) => {
+    const status = p.statuses[i]!
+
+    if (!step.isOptional) {
+      rows.push({ kind: 'step', label: step.label, status })
+
+      return
+    }
+
+    const item = { label: isFix(step) ? 'second fix' : step.commands[0]!, isRun: status === 'done' }
+    const last = rows.at(-1)
+
+    if (last?.kind === 'optional') {
+      last.items.push(item)
+    } else {
+      rows.push({ kind: 'optional', items: [item] })
+    }
+  })
+
+  const required = flow.steps.flatMap((step, i) => (step.isOptional ? [] : [p.statuses[i]!]))
+  const passed = required.filter(s => s === 'done' || s === 'skipped').length
+
+  return {
+    ...p,
+    flow,
+    rows,
+    stepNumber: Math.min(passed + 1, required.length),
+    requiredTotal: required.length,
+    requiredDone: passed,
+    fixes: p.next && isFix(p.next.step) ? FIXES : undefined,
+  }
+}
+
+export const commandFor = (command: string, target: string) =>
+  `/impeccable ${command} ${target === '' ? '<target>' : target}`
+
+const MARKS: Record<Status, string> = { done: '✓', current: '●', skipped: '–', todo: '○' }
 
 // The flow as plain text, for surfaces that cannot draw the pane.
-export const describeFlow = (id: FlowId | null, runs: readonly Run[]): string => {
+export const describeFlow = (id: FlowId | null, runs: readonly Run[], target = ''): string => {
   if (id === null) {
     return [
       'No flow chosen. Pick one:',
-      ...FLOWS.map(f => `  /impeccable-flow ${f.id}  (${f.label})`),
+      ...FLOWS.map(f => `  /impeccable-flow ${f.id}  ${f.summary}`),
     ].join('\n')
   }
 
-  const flow = flowById(id)
-  const p = progress(id, runs)
-  const lines = [
-    `${flow.label}${p.target === '' ? '' : `: ${p.target}`}`,
-    ...flow.steps.map((step, i) => {
-      const status = p.statuses[i]!
-      const notes = [step.isOptional && 'optional', status === 'skipped' && !step.isOptional && 'skipped'].filter(Boolean)
+  const s = summarize(id, runs)
+  const head = `${s.flow.label}${target === '' ? '' : `: ${target}`}`
+  const list = s.rows.map(row =>
+    row.kind === 'step'
+      ? `  ${MARKS[row.status]} ${row.label}${row.status === 'skipped' ? ' (skipped)' : ''}`
+      : `  + Optional: ${row.items.map(item => (item.isRun ? `✓ ${item.label}` : item.label)).join(' · ')}`,
+  )
 
-      return `  ${MARKS[status]} ${step.label}${notes.length > 0 ? ` (${notes.join(', ')})` : ''}`
-    }),
-    '',
-  ]
-
-  if (p.next === undefined) {
-    return [...lines, 'Flow complete. /impeccable-flow reset to start on another target.'].join('\n')
+  if (s.next === undefined) {
+    return [head, '', 'Flow complete. /impeccable-flow reset to start again.', '', ...list].join('\n')
   }
 
+  const action = s.fixes
+    ? s.fixes.map(f => `  ${commandFor(f.command, target)}  (${f.use})`)
+    : [`  ${commandFor(s.next.command, target)}`]
+
   return [
-    ...lines,
-    `Next: ${p.next.step.label}`,
-    `  ${nextCommand(p)}`,
-    `  ${p.next.step.hint}`,
-    ...(p.optional.length > 0 ? [`  Optional first: ${p.optional.map(s => s.label.toLowerCase()).join(', ')}`] : []),
+    head,
+    '',
+    `Next: ${s.next.step.label} (step ${s.stepNumber} of ${s.requiredTotal})`,
+    ...action,
+    `  ${s.next.step.hint}`,
+    '',
+    ...list,
   ].join('\n')
 }

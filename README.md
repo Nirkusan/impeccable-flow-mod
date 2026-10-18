@@ -14,31 +14,39 @@ Pick a flow (new component, full redesign or polish), and the mod marks each ste
 
 - `craft` runs `shape` itself, so running `craft` marks both done.
 - A second `critique` right after the first is a re-run, not a jump to the final re-score.
+- **Skip step** passes over the current step without running it.
 - In the polish flow, the fix step lists the targeted commands to choose from: `layout`, `typeset`, `clarify`, `quieter`, `bolder`, `distill`, `colorize`, `adapt`, `harden`.
 
 ## Two ways it shows
 
-**Pane** (local sessions in the terminal or the desktop app): a panel beside the conversation with a button for each flow, a Reset button, the steps, and the next command with a Copy button.
+**Pane** (local sessions in the terminal or the desktop app), top to bottom:
+
+- A **flow dropdown** and a **Reset** button.
+- A **Target** field (for example `tailor`). Commands you run also update it.
+- The **next step**: its name, "Step 2 of 6", the command with the target filled in, a one-line reason, a **Copy command** button and a quiet **Skip step** button. On the polish flow's fix step, each targeted command has its own Copy button.
+- A **progress bar** over the required steps.
+- The **step list**: `✓` done, `●` current, `○` to do, `–` skipped. Optional steps share one row: `Optional: onboard · animate · harden`.
+
+A toast says when a step completes. When the flow is done, **Start again** clears progress and keeps the target. On the mobile app the dropdown becomes flow buttons and the target is read-only.
 
 **Text** (sessions that cannot draw a pane, such as cloud sessions): the slash command prints the same information.
 
 ```
 /impeccable-flow redesign
 
-Full redesign
-  › Critique
-  ○ Shape
+Redesign: tailor
+
+Next: Shape (step 2 of 6)
+  /impeccable shape tailor
+  Plan the new structure from the critique findings.
+
+  ✓ Critique
+  ● Shape
   ○ Craft
   ○ Audit
   ○ Polish
   ○ Critique (re-score)
-
-Next: Critique
-  /impeccable critique <target>
-  Score the page and list the problems shape and craft will fix.
 ```
-
-`✓` done, `›` current, `○` to do, `–` skipped.
 
 ## Commands
 
