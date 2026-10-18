@@ -4,6 +4,8 @@ A Claude Code mod that tracks the `impeccable` design lifecycle and tells you wh
 
 Pick a flow (new component, full redesign or polish), and the mod marks each step as you run `/impeccable <command> <target>`, whether you type it or Claude runs it. It then suggests the next command, with the target filled in.
 
+<img src="docs/images/pane-redesign.png" alt="The pane on a full redesign: Shape is the next step, with its command, a Copy command button and the step list" width="252">
+
 ## The flows
 
 | Flow | Steps |
@@ -28,6 +30,12 @@ Pick a flow (new component, full redesign or polish), and the mod marks each ste
 - The **step list**: `✓` done, `●` current, `○` to do, `–` skipped. Optional steps share one row: `Optional: onboard · animate · harden`.
 
 A toast says when a step completes. When the flow is done, **Start again** clears progress and keeps the target. On the mobile app the dropdown becomes flow buttons and the target is read-only.
+
+| No flow chosen | Optional steps | Polish fix step | Flow complete |
+| --- | --- | --- | --- |
+| <img src="docs/images/pane-empty.png" alt="No flow chosen: the dropdown and what each flow is for" width="200"> | <img src="docs/images/pane-component-optional.png" alt="Component flow after craft, with the optional steps on one row" width="200"> | <img src="docs/images/pane-polish-fix.png" alt="Polish flow on the fix step, each targeted command with its own Copy button" width="200"> | <img src="docs/images/pane-complete.png" alt="Flow complete with a Start again button" width="200"> |
+
+The images are mockups of the pane's layout and wording. The app draws its own dropdown, field and buttons, so colors and corners follow your theme.
 
 **Text** (sessions that cannot draw a pane, such as cloud sessions): the slash command prints the same information.
 
