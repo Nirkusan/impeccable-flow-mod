@@ -1,0 +1,5 @@
+{
+  "name": "impeccable-flow",
+  "owner": { "name": "Nirkusan" },
+  "plugins": [{ "name": "impeccable-flow", "source": "./" }]
+}

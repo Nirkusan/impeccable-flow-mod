@@ -1,0 +1,6 @@
+{
+  "name": "impeccable-flow",
+  "version": "0.1.0",
+  "description": "A pane that tracks the impeccable design lifecycle and suggests the next command",
+  "types": "./types/index.d.ts"
+}
